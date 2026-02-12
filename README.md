@@ -33,4 +33,5 @@ python run_server.py
 ![首页截图](./screenshots/web1.png)
 
  端口管理
-![端口管理](./screenshots/web2.png)
+![端口管理](./screenshots/web2-0.png)
+![](./screenshots/web2.png)
