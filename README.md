@@ -25,3 +25,11 @@ python run_server.py
 默认端口为 8080。
 
 请确保运行环境能通过 SSH 连接到交换机。
+
+## 📸 运行截图
+
+### 首页概览
+![首页截图](./screenshots/web1.png)
+
+### 端口管理
+![端口管理](./screenshots/web2.png)
