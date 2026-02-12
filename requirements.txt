@@ -1,10 +1,17 @@
+# === 核心框架 (保持验证过的版本) ===
 Flask==3.0.2
+# [新增] 用户登录管理 (本次升级必需)
+Flask-Login==0.6.3
+
+# === 交换机连接核心 (保持验证过的版本) ===
 netmiko==4.3.0
-waitress==3.0.0
 paramiko==3.4.0
-textfsm==1.1.3
 scp==0.14.5
 pyserial==3.5
+textfsm==1.1.3
+
+# === Web服务组件 (保持验证过的版本) ===
+waitress==3.0.0
 Jinja2==3.1.3
 Werkzeug==3.0.1
 click==8.1.7
