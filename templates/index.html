@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>H3C 交换机配置助手 (离线版)</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding-top: 20px; }
+        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .log-box { background: #212529; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; max-height: 300px; overflow-y: auto; font-size: 0.9rem;}
+        .status-deny { color: #dc3545; font-weight: bold; }
+        .status-permit { color: #198754; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2 class="text-center mb-4">H3C S5130S 配置管理系统</h2>
+
+    <div class="card p-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label text-muted">IP 地址</label>
+                <input type="text" class="form-control" id="sw_ip" value="10.139.100.203">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label text-muted">端口</label>
+                <input type="number" class="form-control" id="sw_port" value="22">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label text-muted">用户名</label>
+                <input type="text" class="form-control" id="sw_user" value="admin">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-muted">密码</label>
+                <input type="password" class="form-control" id="sw_pass">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-info text-white w-100 fw-bold" onclick="testConnection()">
+                    🔌 连接测试
+                </button>
+            </div>
+            
+            <div class="col-md-12 text-end mt-3 border-top pt-3">
+                <span class="text-muted me-2" style="font-size: 0.9rem;">操作完成后，请记得保存配置以免丢失:</span>
+                <button class="btn btn-warning fw-bold" onclick="saveConfig()">
+                    💾 保存当前配置 (Write)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="acl-tab-btn" data-bs-toggle="tab" data-bs-target="#acl-tab-pane" type="button" role="tab">ACL MAC 4000 管理</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="port-tab-btn" data-bs-toggle="tab" data-bs-target="#port-tab-pane" type="button" role="tab">端口 IP+MAC 绑定</button>
+        </li>
+    </ul>
+
+    <div class="tab-content p-3 border border-top-0 bg-white" id="myTabContent">
+        
+        <div class="tab-pane fade show active" id="acl-tab-pane" role="tabpanel">
+            <div class="row">
+                <div class="col-md-5">
+                    <h5>添加规则</h5>
+                    <div class="alert alert-info py-2" style="font-size: 0.9rem;">
+                        提示: 新规则请指定小于 999 的 ID 以确保生效。
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">ID</span>
+                        <input type="number" class="form-control" id="acl_id" placeholder="例如: 12">
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">MAC</span>
+                        <input type="text" class="form-control" id="acl_mac" placeholder="aaaa-bbbb-cccc">
+                        <button class="btn btn-primary" onclick="addAcl()">添加白名单</button>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <h5>规则列表 <button class="btn btn-sm btn-outline-secondary" onclick="loadAcl()">刷新</button></h5>
+                    <table class="table table-striped table-hover">
+                        <thead><tr><th>Rule ID</th><th>动作</th><th>MAC 地址</th><th>操作</th></tr></thead>
+                        <tbody id="acl_table_body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="port-tab-pane" role="tabpanel">
+            <div class="row">
+                <div class="col-md-12 mb-4">
+                    <h5>端口配置 (一步法: VLAN + STP + Verify + Binding)</h5>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">端口选择</label>
+                            <div class="input-group">
+                                <select class="form-select" id="port_name">
+                                    <option value="" selected>请先点击右侧刷新...</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="getInterfaces()" title="从交换机获取端口列表">🔄 获取端口</button>
+                                <button class="btn btn-info text-white" onclick="queryPort()" title="查询选中端口的配置">🔍 查询配置</button>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">VLAN ID</label>
+                            <input type="text" class="form-control" id="vlan_id" placeholder="202">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">绑定 IP</label>
+                            <input type="text" class="form-control" id="bind_ip" placeholder="IP 地址">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">绑定 MAC</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="bind_mac" placeholder="MAC 地址">
+                                <button class="btn btn-success" onclick="applyPort()">添加绑定</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <h5>该端口下的已绑定设备列表</h5>
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-light"><tr><th>IP 地址</th><th>MAC 地址</th><th>操作</th></tr></thead>
+                        <tbody id="bind_table_body">
+                            <tr><td colspan="3" class="text-center text-muted">请先选择端口并点击“查询”...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <h5>操作日志</h5>
+        <div id="log_area" class="log-box">等待操作...</div>
+    </div>
+</div>
+
+<script src="/static/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof bootstrap === 'undefined') {
+            alert("⚠️ 严重错误：无法加载本地 Bootstrap JS 文件！\n\nTab 切换功能将失效。\n请检查 static/js/bootstrap.bundle.min.js 是否存在。");
+        }
+    });
+
+    async function apiCall(endpoint, data) {
+        const ip = document.getElementById('sw_ip').value;
+        const port = document.getElementById('sw_port').value || 22;
+        const user = document.getElementById('sw_user').value;
+        const pass = document.getElementById('sw_pass').value;
+        if(!ip || !pass) { alert("请输入交换机 IP 和密码"); return; }
+        document.getElementById('log_area').innerHTML = "正在执行，请稍候...<br>";
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ip, port, user, pass, ...data})
+            });
+            const result = await response.json();
+            document.getElementById('log_area').innerHTML += result.log || result.msg;
+            if(result.status === 'error') alert("错误: " + result.msg);
+            return result;
+        } catch (error) {
+            alert("请求失败，请检查后台");
+        }
+    }
+
+    async function testConnection() { await apiCall('/test_connection', {}); }
+
+// === 获取接口列表函数 (升级版：支持显示描述) ===
+    async function getInterfaces() {
+        const select = document.getElementById('port_name');
+        
+        // 记录当前选中的值，以便刷新后如果还在列表里，保持选中
+        const currentVal = select.value;
+        
+        select.innerHTML = '<option>加载中...</option>';
+        
+        const res = await apiCall('/get_interfaces', {});
+        if(res && res.status === 'success') {
+            select.innerHTML = ''; // 清空
+            
+            if(res.data.length === 0) {
+                select.innerHTML = '<option value="">未找到物理接口</option>';
+            } else {
+                // 填充下拉框
+                res.data.forEach(item => {
+                    const option = document.createElement('option');
+                    
+                    // 这里是关键：
+                    // option.value 传给后端 (GigabitEthernet1/0/1)
+                    // option.text 显示给用户 (GigabitEthernet1/0/1 (某某办公室))
+                    option.value = item.value; 
+                    option.text = item.text;
+                    
+                    select.appendChild(option);
+                });
+                
+                // 尝试恢复之前的选择，如果没有则默认选中第一个
+                if (currentVal) {
+                    select.value = currentVal;
+                }
+                if (!select.value && res.data.length > 0) {
+                    select.value = res.data[0].value;
+                }
+            }
+        } else {
+            select.innerHTML = '<option value="">获取失败</option>';
+        }
+    }
+
+    async function loadAcl() {
+        const res = await apiCall('/get_acl', {});
+        if(res && res.status === 'success') {
+            const tbody = document.getElementById('acl_table_body');
+            tbody.innerHTML = '';
+            res.data.forEach(rule => {
+                const actionClass = rule.action.toLowerCase() === 'deny' ? 'status-deny' : 'status-permit';
+                tbody.innerHTML += `<tr>
+                    <td>${rule.id}</td>
+                    <td class="${actionClass}">${rule.action}</td>
+                    <td>${rule.mac}</td>
+                    <td><button class="btn btn-danger btn-sm" onclick="delAcl(${rule.id})">删除</button></td>
+                </tr>`;
+            });
+        }
+    }
+    async function addAcl() {
+        const mac = document.getElementById('acl_mac').value;
+        const rule_id = document.getElementById('acl_id').value;
+        if(!mac) return alert("请输入 MAC");
+        await apiCall('/add_acl', {mac, rule_id});
+        loadAcl();
+    }
+    async function delAcl(id) {
+        if(confirm("确定删除 Rule " + id + " 吗？")) {
+            await apiCall('/del_acl', {rule_id: id});
+            loadAcl(); 
+        }
+    }
+    async function queryPort() {
+        const port = document.getElementById('port_name').value;
+        if(!port || port.includes("加载中") || port.includes("请先")) return alert("请先获取并选择一个端口");
+        
+        const res = await apiCall('/get_port_info', {interface: port});
+        if(res && res.status === 'success') {
+            if(res.data.vlan) document.getElementById('vlan_id').value = res.data.vlan;
+            const tbody = document.getElementById('bind_table_body');
+            tbody.innerHTML = '';
+            if(res.data.bindings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">当前端口无绑定信息</td></tr>';
+            } else {
+                res.data.bindings.forEach(bind => {
+                    tbody.innerHTML += `<tr><td>${bind.ip}</td><td>${bind.mac}</td><td><button class="btn btn-danger btn-sm" onclick="delBinding('${bind.ip}', '${bind.mac}')">解绑</button></td></tr>`;
+                });
+            }
+        }
+    }
+    async function applyPort() {
+        const port = document.getElementById('port_name').value;
+        const vlan = document.getElementById('vlan_id').value;
+        const ip = document.getElementById('bind_ip').value;
+        const mac = document.getElementById('bind_mac').value;
+        if(!port) return alert("请选择端口");
+        if(!vlan || !ip || !mac) return alert("请填写完整信息");
+        await apiCall('/bind_port', {interface: port, vlan, bind_ip: ip, mac});
+        queryPort(); 
+    }
+    async function delBinding(ip, mac) {
+        const port = document.getElementById('port_name').value;
+        if(!confirm(`确定要解除端口 ${port} 上 ${ip} - ${mac} 的绑定吗？`)) return;
+        await apiCall('/del_port_binding', {interface: port, del_ip: ip, del_mac: mac});
+        queryPort(); 
+    }
+    async function saveConfig() {
+        if(!confirm("确定要执行 save 命令保存当前配置吗？")) return;
+        await apiCall('/save_config', {});
+        alert("保存命令已发送，请查看日志区确认结果。");
+    }
+</script>
+</body>
+</html>

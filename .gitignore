@@ -1,0 +1,22 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 虚拟环境 (防止误传)
+venv/
+env/
+.env
+
+# 交换机备份配置 (这是私密数据，不能传)
+backups/
+
+# 数据库文件 (如果以后有了数据库，不要传)
+*.db
+*.sqlite3
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
