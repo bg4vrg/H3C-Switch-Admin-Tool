@@ -1,4 +1,4 @@
-# H3C Switch Admin Tool v2.0.0
+# H3C Switch Admin Tool v2.1.0
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![License](https://img.shields.io/badge/License-GPLv3-green)
@@ -7,9 +7,15 @@
 基于 Python 3.11 + Flask + Netmiko 开发的企业级 H3C 交换机 Web 运维平台。
 从早期的单一脚本工具，进化为集成了 **资产管理**、**安全登录** 和 **批量自动化备份** 的综合运维系统。
 
+**Update：v2.1.0** 
+
+* **修复了交换机端口描述获取不到的bug**
+* **添加了关键端口保护功能，避免普通用户因权限过高对核心交换机和互联口等重要端口的误操作**
+
 ## ✨ 核心功能 (Features)
 
 ### 🚀 自动化运维
+
 * **批量配置备份 (Batch Backup)**：一键轮询数据库中所有设备，自动抓取 `display current-configuration` 并按日期归档保存。支持错误跳过与实时日志反馈。
 * **ACL MAC 4000 管理**：可视化的 MAC 白名单规则(交换机上提前创建mac 4000列表)查看、添加与删除。
 * **端口 IP+MAC 绑定**：自动抓取物理端口描述 (Description) 和 Brief 信息；一键下发 `ip source binding ip-address` 绑定命令 (VLAN  + Verify + Binding)。
@@ -22,6 +28,7 @@
 * **快捷连接**：下拉菜单选择设备，自动填充 IP、端口、账号密码，告别重复输入。
 * **安全认证**：基于 Flask-Login 的用户登录系统，密码采用哈希加密存储。
 * **操作审计**：实时显示操作日志，明确反馈成功/失败状态。
+* **关键端口保护**:Smart Keyword Protection,如果描述里包含 'Uplink', 'Trunk', 'Core', 'Connect', 'To', 'hexin', 'huiju', 'link' 等关键词(不区分大小写)，系统直接拒绝操作，并弹窗警告：“这是上联端口，禁止操作！”关键词可在app.py中添加修改。
 
 ## 🛠️ 环境依赖
 
@@ -98,4 +105,5 @@ H3C-Switch-Admin-Tool/
 ### 3. 设备管理列表
 *![资产列表](./screenshots/switchlist.png)*
 
-
+### 4. 设备端口保护
+*![设备端口保护](./screenshots/GEprotect.png)*

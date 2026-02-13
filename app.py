@@ -9,6 +9,10 @@ import traceback
 app = Flask(__name__)
 app.secret_key = 'super_secret_key_for_h3c_admin_tool_2026'
 
+# 🚫 关键端口保护关键词 (不区分大小写)
+# 只要端口描述包含这些词，系统将拒绝修改
+PROTECTED_KEYWORDS = ['Uplink', 'Trunk', 'Core', 'Connect', 'To', 'hexin', 'huiju', 'link']
+
 # 备份文件存放目录
 BACKUP_ROOT = 'backups'
 if not os.path.exists(BACKUP_ROOT):
@@ -101,7 +105,7 @@ def change_pass_api():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
-# === 🔥 重点新增：批量备份功能 ===
+# === 批量备份功能 ===
 @app.route('/batch_backup', methods=['POST'])
 @login_required
 def batch_backup():
@@ -147,7 +151,6 @@ def batch_backup():
         except Exception as e:
             fail_count += 1
             error_msg = str(e)
-            # 简化报错信息，只显示关键部分
             if "Authentication failed" in error_msg: error_msg = "认证失败(密码错误)"
             elif "timed out" in error_msg: error_msg = "连接超时"
             log_messages.append(f"<span class='status-deny'>❌ 备份失败</span>: {error_msg}")
@@ -158,8 +161,7 @@ def batch_backup():
     
     return jsonify({'status': 'success', 'log': full_log})
 
-# === 其他业务路由 (保持不变) ===
-# 为了篇幅，以下路由逻辑不变，直接粘贴即可
+# === 业务路由 ===
 
 @app.route('/test_connection', methods=['POST'])
 @login_required
@@ -191,23 +193,51 @@ def get_port_info():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
+# === 🔥 修改：增加保护逻辑的绑定接口 ===
 @app.route('/bind_port', methods=['POST'])
 @login_required
 def bind_port():
     try:
         d = request.json
         mgr = get_manager(d)
+        
+        # 1. 保护检查
+        info, _ = mgr.get_port_info(d['interface'])
+        desc = info.get('description', '')
+        
+        for kw in PROTECTED_KEYWORDS:
+            if kw.lower() in desc.lower():
+                return jsonify({
+                    'status': 'error', 
+                    'msg': f"⛔ 拒绝操作！<br>该端口描述为: [ {desc} ]<br>包含保护关键词: '{kw}'。<br>这是关键上联端口，禁止自动化修改！"
+                })
+        
+        # 2. 执行操作
         log = mgr.configure_port_binding(d['interface'], d['vlan'], d['bind_ip'], d['mac'])
         return jsonify({'status': 'success', 'log': log.replace('\n', '<br>')})
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
+# === 🔥 修改：增加保护逻辑的解绑接口 ===
 @app.route('/del_port_binding', methods=['POST'])
 @login_required
 def del_port_binding():
     try:
         d = request.json
         mgr = get_manager(d)
+
+        # 1. 保护检查
+        info, _ = mgr.get_port_info(d['interface'])
+        desc = info.get('description', '')
+        
+        for kw in PROTECTED_KEYWORDS:
+            if kw.lower() in desc.lower():
+                return jsonify({
+                    'status': 'error', 
+                    'msg': f"⛔ 拒绝操作！<br>该端口描述为: [ {desc} ]<br>包含保护关键词: '{kw}'。<br>这是关键上联端口，禁止自动化修改！"
+                })
+
+        # 2. 执行操作
         log = mgr.delete_port_binding(d['interface'], d['del_ip'], d['del_mac'])
         return jsonify({'status': 'success', 'log': log.replace('\n', '<br>')})
     except Exception as e:
@@ -258,4 +288,4 @@ def save_config():
         return jsonify({'status': 'error', 'msg': str(e)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)

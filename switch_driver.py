@@ -43,11 +43,12 @@ class H3CManager:
                     
         return f"✅ 连接成功！\n设备名称: {hostname}\n设备型号: {model}"
 
+# === 🛠️ 修复版 get_interface_list (支持名称自动缩写匹配) ===
     def get_interface_list(self):
         conn = self._get_connection()
-        # 获取 brief 信息
+        # 获取 brief 信息 (得到 GE1/0/1 这种短名)
         brief_out = conn.send_command("display interface brief")
-        # 获取详细配置信息（为了拿 description）
+        # 获取详细配置信息 (得到 GigabitEthernet1/0/1 这种长名 + description)
         config_out = conn.send_command("display current-configuration interface")
         conn.disconnect()
 
@@ -57,68 +58,118 @@ class H3CManager:
         for line in lines:
             parts = line.split()
             if len(parts) > 0:
-                if parts[0].startswith('GE') or parts[0].startswith('XGE') or parts[0].startswith('Gigabit'):
-                    interfaces.append({'name': parts[0], 'desc': ''})
+                # 兼容 GE, XGE (万兆), MGE (多速率), Bridge-Aggregation (聚合口)
+                name = parts[0]
+                if name.startswith(('GE', 'XGE', 'Gigabit', 'MGE', 'Bridge')):
+                    interfaces.append({'name': name, 'desc': ''})
         
         # 2. 解析 config 获取 description
         current_iface = None
         for line in config_out.split('\n'):
             line = line.strip()
             if line.startswith('interface '):
-                current_iface = line.split(' ')[1]
+                # 拿到长名: GigabitEthernet1/0/31
+                full_name = line.split(' ')[1]
+                
+                # 🔄 核心修复：把长名“翻译”成短名，以便和 brief 列表匹配
+                current_iface = full_name.replace('GigabitEthernet', 'GE')\
+                                         .replace('Ten-GigabitEthernet', 'XGE')\
+                                         .replace('M-GigabitEthernet', 'MGE')\
+                                         .replace('Bridge-Aggregation', 'BAGG')
+                                         
             elif line.startswith('description ') and current_iface:
-                desc_text = line.replace('description ', '')
-                # 找到对应的接口并更新描述
+                # 提取描述内容
+                desc_text = line.replace('description ', '').strip()
+                
+                # 在列表里找这个接口，找到了就更新描述
                 for iface in interfaces:
+                    # 现在的 current_iface 已经是 GE1/0/31 了，可以匹配上了
                     if iface['name'] == current_iface:
                         iface['desc'] = desc_text
                         break
         
-        # 3. 格式化输出
+        # 3. 格式化输出 (前端下拉框使用)
         result = []
         for iface in interfaces:
             display_text = iface['name']
             if iface['desc']:
-                display_text += f" ({iface['desc']})"
+                display_text += f" ({iface['desc']})"  # 效果: GE1/0/31 (link-202.16)
             result.append({'value': iface['name'], 'text': display_text})
             
         return result
 
+# === 🛠️ 修复版 get_port_info ===
     def get_port_info(self, interface_name):
         conn = self._get_connection()
+        # 优先使用 display current-configuration，因为它格式最全
         cmds = [
             f"display current-configuration interface {interface_name}",
-            f"display this interface {interface_name}" # 备用
         ]
         output = ""
-        for cmd in cmds:
-            output = conn.send_command(cmd)
-            if "interface" in output: break 
-        conn.disconnect()
+        try:
+            for cmd in cmds:
+                output = conn.send_command(cmd)
+                if "interface" in output: break 
+        except Exception as e:
+            # 如果出错，至少把 output 返回去方便调试
+            pass
+        finally:
+            conn.disconnect()
 
+        # === 开始解析 ===
         vlan = ""
-        vlan_match = re.search(r'port access vlan (\d+)', output)
-        if vlan_match:
-            vlan = vlan_match.group(1)
-
+        description = ""
         bindings = []
-        for line in output.split('\n'):
-            if 'ip-source binding' in line:
-                # 格式通常是: ip-source binding ip-address 192.168.1.1 mac-address 0000-1111-2222
-                ip_match = re.search(r'ip-address ([\d\.]+)', line)
-                mac_match = re.search(r'mac-address ([\w\-]+)', line)
-                if ip_match and mac_match:
-                    bindings.append({'ip': ip_match.group(1), 'mac': self.format_mac(mac_match.group(1))})
-        
-        return {'vlan': vlan, 'bindings': bindings}, output
 
+        for line in output.split('\n'):
+            line = line.strip() # 去除首尾空格
+
+            # 1. 解析 VLAN
+            # 兼容: "port access vlan 202"
+            if line.startswith('port access vlan'):
+                parts = line.split()
+                # parts 通常是 ['port', 'access', 'vlan', '202']
+                if len(parts) >= 4:
+                    vlan = parts[3]
+
+            # 2. 解析 Description (描述)
+            # 兼容: "description link-202.16"
+            if line.startswith('description'):
+                # 使用 split(maxsplit=1) 确保只切分第一个空格
+                parts = line.split(maxsplit=1)
+                if len(parts) > 1:
+                    description = parts[1].strip()
+
+            # 3. 解析绑定信息 (核心修复点)
+            # 你的设备输出: ip source binding ...
+            # 旧版本设备输出: ip-source binding ...
+            # 修复：只要行里同时包含 'source binding' 和 'ip-address' 就认为是绑定行
+            if 'source binding' in line and 'ip-address' in line:
+                # 使用正则提取，兼容中间有多个空格的情况 (\s+)
+                ip_match = re.search(r'ip-address\s+([\d\.]+)', line)
+                mac_match = re.search(r'mac-address\s+([\w\-\.]+)', line)
+                
+                if ip_match and mac_match:
+                    bindings.append({
+                        'ip': ip_match.group(1), 
+                        'mac': self.format_mac(mac_match.group(1))
+                    })
+        
+        return {
+            'vlan': vlan, 
+            'bindings': bindings, 
+            'description': description
+        }, output
+
+# === 🛠️ 修复版：写入绑定 (去掉 ip-source 中的短横线) ===
     def configure_port_binding(self, interface_name, vlan_id, bind_ip, bind_mac):
         cmds = [
             f"interface {interface_name}",
             "stp edged-port",
             f"port access vlan {vlan_id}",
             "ip verify source ip-address mac-address",
-            f"ip-source binding ip-address {bind_ip} mac-address {self.format_mac(bind_mac)}"
+            # 修改点：ip-source -> ip source
+            f"ip source binding ip-address {bind_ip} mac-address {self.format_mac(bind_mac)}"
         ]
         
         conn = self._get_connection()
@@ -127,10 +178,12 @@ class H3CManager:
         conn.disconnect()
         return output
 
+    # === 🛠️ 修复版：解除绑定 (去掉 ip-source 中的短横线) ===
     def delete_port_binding(self, interface_name, del_ip, del_mac):
         cmds = [
             f"interface {interface_name}",
-            f"undo ip-source binding ip-address {del_ip} mac-address {self.format_mac(del_mac)}"
+            # 修改点：undo ip-source -> undo ip source
+            f"undo ip source binding ip-address {del_ip} mac-address {self.format_mac(del_mac)}"
         ]
         conn = self._get_connection()
         output = conn.send_config_set(cmds)
@@ -188,7 +241,6 @@ class H3CManager:
         conn.disconnect()
         return output
 
-    # === 新增：获取完整配置 ===
     def get_full_config(self):
         conn = self._get_connection()
         try:
