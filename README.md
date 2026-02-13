@@ -14,7 +14,7 @@
 * **ACL MAC 4000 管理**：可视化的 MAC 白名单规则(交换机上提前创建mac 4000列表)查看、添加与删除。
 * **端口 IP+MAC 绑定**：自动抓取物理端口描述 (Description) 和 Brief 信息；一键下发 `ip source binding ip-address` 绑定命令 (VLAN  + Verify + Binding)。
 * **配置备份**：一键保存当前配置 (Save)。
-* * **离线可用**：所有静态资源本地化，无需互联网连接。
+* **离线可用**：所有静态资源本地化，无需互联网连接。
 
 ### 🛡️ 资产与安全
 
@@ -97,4 +97,5 @@ H3C-Switch-Admin-Tool/
 
 ### 3. 设备管理列表
 *![资产列表](./screenshots/switchlist.png)*
+
 
