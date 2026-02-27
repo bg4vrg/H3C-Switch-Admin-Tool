@@ -1,4 +1,4 @@
-# H3C Switch Admin Tool v2.1.0
+# H3C Switch Admin Tool v2.2.0
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![License](https://img.shields.io/badge/License-GPLv3-green)
