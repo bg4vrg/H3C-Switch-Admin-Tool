@@ -151,5 +151,6 @@ H3C-Switch-Admin-Tool/
 
 ### 7. 增加交换机配置自动备份模块
 
-*![配置自动备份](./screenshots/autobackup.png.png)*
+*![配置自动备份](./screenshots/autobackup.png)*
+
 
