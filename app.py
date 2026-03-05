@@ -1,3 +1,4 @@
+import openpyxl
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import datetime
@@ -114,6 +115,15 @@ def api_audit_logs():
         # 默认拉取最新的 100 条记录
         logs = db.get_audit_logs(limit=100)
         return jsonify({'status': 'success', 'data': logs})
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)})
+# 开放api接口给数据库做前面板数据
+@app.route('/api/dashboard_stats', methods=['GET'])
+@login_required
+def api_dashboard_stats():
+    try:
+        stats = db.get_dashboard_stats()
+        return jsonify({'status': 'success', 'data': stats})
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
@@ -314,6 +324,116 @@ def save_config():
         return jsonify({'status': 'success', 'log': log.replace('\n', '<br>')})
     except Exception as e:
         db.log_operation(current_user.username, client_ip, device_ip, "保存配置", f"报错: {str(e)}", "失败")
+        return jsonify({'status': 'error', 'msg': str(e)})
+
+
+# === 📊 Excel 批量导入解析接口 ===
+@app.route('/api/parse_excel', methods=['POST'])
+@login_required
+def parse_excel():
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'msg': '未找到上传的文件'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'msg': '文件名为空'})
+
+    try:
+        # 读取 Excel (data_only=True 确保读取的是值而不是公式)
+        wb = openpyxl.load_workbook(file, data_only=True)
+        sheet = wb.active
+        
+        # 1. 获取表头并校验
+        headers = [str(cell.value).strip() if cell.value else "" for cell in sheet[1]]
+        required_cols = ['交换机IP', '端口', 'VLAN', '绑定IP', '绑定MAC', '模式']
+        
+        col_indices = {}
+        for req in required_cols:
+            if req in headers:
+                col_indices[req] = headers.index(req)
+            else:
+                return jsonify({'status': 'error', 'msg': f"Excel 缺少必填的列头：【{req}】"})
+
+        # 2. 逐行提取数据
+        data = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            switch_ip = row[col_indices['交换机IP']]
+            if not switch_ip: continue # 如果交换机IP为空，视为结束或空行，直接跳过
+            
+            data.append({
+                'switch_ip': str(switch_ip).strip(),
+                'interface': str(row[col_indices['端口']]).strip(),
+                'vlan': str(row[col_indices['VLAN']]).strip(),
+                'bind_ip': str(row[col_indices['绑定IP']]).strip(),
+                'mac': str(row[col_indices['绑定MAC']]).strip(),
+                'mode': str(row[col_indices['模式']]).strip().lower()
+            })
+            
+        return jsonify({'status': 'success', 'data': data})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': f"读取 Excel 异常: {str(e)}"})
+
+# === 📊 Excel 批量自动化引擎专用接口 ===
+@app.route('/api/execute_excel_row', methods=['POST'])
+@login_required
+def execute_excel_row():
+    try:
+        d = request.json
+        client_ip = request.remote_addr
+        switch_ip = d.get('switch_ip')
+        interface = d.get('interface')
+        vlan = d.get('vlan')
+        bind_ip = d.get('bind_ip')
+        mac = d.get('mac')
+        mode = d.get('mode', 'access')
+
+        # 1. 自动从数据库获取该交换机的账号密码 (免去手动输入)
+        switches = db.get_all_switches()
+        target_sw = next((s for s in switches if s['ip'] == switch_ip), None)
+        if not target_sw:
+            return jsonify({'status': 'error', 'msg': f"资产管理库未登记该IP({switch_ip})，无法获取密码"})
+
+        # 2. 组装连接参数
+        d['ip'] = switch_ip
+        d['user'] = target_sw['username']
+        d['pass'] = target_sw['password']
+        d['port'] = target_sw['port']
+
+        mgr = get_manager(d)
+
+        # 3. 执行前安全拦截：保护核心上联口
+        info, _ = mgr.get_port_info(interface)
+        desc = info.get('description', '')
+        for kw in PROTECTED_KEYWORDS:
+            if kw.lower() in desc.lower():
+                details = f"[Excel批量] 端口:{interface} | IP:{bind_ip} | MAC:{mac} | 模式:{mode}"
+                db.log_operation(current_user.username, client_ip, switch_ip, "批量端口绑定", f"{details} | 触发保护端口拦截", "失败")
+                return jsonify({'status': 'error', 'msg': f"触发保护端口拦截({kw})"})
+
+# 4. 执行底层下发指令，并捕获回显
+        raw_log = mgr.configure_port_binding(interface, vlan, bind_ip, mac, mode)
+
+        # 💡 核心修复：安全处理底层函数的奇葩返回值，防止 jsonify 崩溃
+        if isinstance(raw_log, bytes):
+            log_output = raw_log.decode('utf-8', errors='ignore')
+        elif raw_log is None:
+            log_output = "> [System] 配置指令已成功发送 (底层函数未返回详细回显)"
+        else:
+            log_output = str(raw_log)
+            
+        # 🛡️ 过滤危险字符：防止交换机的 <H3C> 提示符被网页当成 HTML 标签隐藏掉
+        log_output = log_output.replace('<', '&lt;').replace('>', '&gt;')
+
+        # 5. 记录成功的审计日志
+        details = f"[Excel批量] 端口:{interface} | IP:{bind_ip} | MAC:{mac} | 模式:{mode} | VLAN:{vlan}"
+        db.log_operation(current_user.username, client_ip, switch_ip, "批量端口绑定", details, "成功")
+
+        return jsonify({'status': 'success', 'log': log_output})        
+    except Exception as e:
+        # 记录失败日志
+        details = f"[Excel批量] 端口:{interface} | IP:{bind_ip} | MAC:{mac}"
+        db.log_operation(current_user.username, client_ip, switch_ip, "批量端口绑定", f"{details} | 报错: {str(e)}", "失败")
         return jsonify({'status': 'error', 'msg': str(e)})
 
 # === ⏰ 凌晨幽灵：定时自动备份任务 ===

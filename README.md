@@ -1,12 +1,22 @@
-# H3C Switch Admin Tool v2.3.2
+# H3C Switch Admin Tool v2.4.0
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![License](https://img.shields.io/badge/License-GPLv3-green)
-![Version](https://img.shields.io/badge/Version-v2.3.2-orange)
+![Version](https://img.shields.io/badge/Version-v2.4.0-orange)
 
 
 基于 Python 3.11 + Flask + Netmiko 开发的企业级 H3C 交换机 Web 运维平台。
 本项目致力于在**零额外硬件成本**的前提下，充分挖掘交换机底层安全特性，从早期的单一脚本工具不断进化为集成了 **资产管理**、**安全登录** 、**ACL 极简管理**和 **批量自动化备份**、**日志审计**的综合运维系统，实现堪比商业 NAC（网络准入控制）系统的安全管控能力。
+
+### 🚀 v2.4.0 引入 Excel 批量部署与瀑布流日志引擎
+✨ 核心新特性：
+1. Excel 自动化引擎：新增『Excel 批量部署』核心业务模块，支持上传标准化表格进行全网跨交换机的规则批量下发。
+2. 预检与防呆机制：前端引入数据解析预览大屏，支持下发前的格式校验与状态核对，杜绝盲目批量执行引发网络事故。
+3. 终端瀑布流回显：重构批量执行逻辑，前端引入极客风黑色控制台，实时捕获并滚动渲染底层交换机 SSH 交互日志（完美转义 <H3C> 提示符），提供极致的执行掌控感。
+4. 强力容错兼容：后端解析引擎同步支持 .xlsx 与纯文本 .csv 格式，并彻底修复了 Excel 幽灵浮点数（如 VLAN 202.0）导致的非法指令报错问题。
+
+🔥 系统架构正式迈入自动化割接时代！
+
 
 ### 🚀 v2.3.2 引入 APScheduler 实现凌晨无人值守自动备份 
 

@@ -135,3 +135,31 @@ def get_audit_logs(limit=100):
     rows = cur.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+	      
+# === 📊 数据看板统计 ===
+def get_dashboard_stats():
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # 1. 设备总数
+    cur.execute("SELECT COUNT(*) FROM switches")
+    switch_count = cur.fetchone()[0]
+    
+    # 2. 今日操作次数
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    cur.execute("SELECT COUNT(*) FROM audit_logs WHERE timestamp LIKE ?", (today + '%',))
+    today_ops = cur.fetchone()[0]
+    
+    # 3. 最近一次定时自动备份的状态
+    cur.execute("SELECT status, timestamp, details FROM audit_logs WHERE action = '定时自动备份' ORDER BY id DESC LIMIT 1")
+    last_backup = cur.fetchone()
+    
+    conn.close()
+    
+    return {
+        'switch_count': switch_count,
+        'today_ops': today_ops,
+        'last_backup_status': last_backup['status'] if last_backup else '无记录',
+        'last_backup_time': last_backup['timestamp'] if last_backup else '等待今晚执行',
+        'last_backup_details': last_backup['details'] if last_backup else '系统尚未执行过自动备份'
+    }
