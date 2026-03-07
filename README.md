@@ -36,24 +36,31 @@
 
 
 **1. 首页数据看板与资产速连**
+
 ![Dashboard](./screenshots/dashboard.png)
 
 **2. Excel 批量自动化部署与瀑布流日志**
+
 ![Excel Batch](./screenshots/piliangbushu.png)
 
 **3. 企业级安全审计日志中心**
+
 ![Audit Logs](./screenshots/autobackup.png)
 
 **4. 多厂商资产管理控制台**
+
 ![Asset Management](./screenshots/devices.png)
 
 **5. 端口安全绑定**
 
 ![端口配置](./screenshots/web2-0.png)
+
 ![获取端口信息](./screenshots/web2.png)
+
 ![设备端口保护](./screenshots/GEprotect.png)
 
-**6. **交换机自动备份**
+**6. 交换机自动备份**
+
 ![配置自动备份](./screenshots/autobackup.png)
 
 **7. 操作时增加进度条**
@@ -82,27 +89,29 @@
 2. **创建并激活虚拟环境 (强烈推荐)**
 
    ```bash
-#Windows (Anaconda/Miniconda)
-conda create -n switch_admin python=3.10
-conda activate switch_admin
+   #Windows (Anaconda/Miniconda)
+   conda create -n switch_admin python=3.10
+   conda activate switch_admin
 
 3. **安装依赖**
 
    ```bash
-pip install -r requirements.txt
+   pip install -r requirements.txt
 
 4. **一键启动服务**
 
-```bash
-python run_server.py
-```
+   ```bash
+   python run_server.py
+
 
 
 
 ## 服务启动后，默认监听 http://0.0.0.0:8080，局域网内任意浏览器即可访问。
 
 
+
 ## 🗺️ 未来路线图 (Roadmap v3.0+)
+
 
 [1] 多厂商驱动支持: 接入 HuaweiManager 实现华为设备的无缝调度。
 
@@ -111,5 +120,7 @@ python run_server.py
 [3] MAC / IP 全网物理定位 (MAC Tracker): 输入 MAC 地址，并发追踪并精准定位其所在的楼层交换机与物理端口。
 
 [4] 密码库高强度加密: SQLite 中的凭证由明文升级为 AES256 密文存储。
+
+
 
 ## ⚠️ 免责声明: 本工具涉及对底层网络设备的直接配置修改，在生产环境中批量下发前，请务必在测试设备上充分验证！
